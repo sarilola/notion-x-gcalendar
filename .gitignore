@@ -1,0 +1,17 @@
+# Credentials (VERY IMPORTANT)
+.env
+keys.env
+*.json
+!package.json
+
+# Dependencies
+node_modules/
+
+# Build files
+dist/
+*.js
+*.js.map
+
+# System files
+.DS_Store
+Thumbs.db
