@@ -1,20 +1,15 @@
 import * as dotenv from 'dotenv';
 import path from 'node:path';
+
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 
-import { PageObjectResponse } from "@notionhq/client";
-import { calendar_v3 } from "googleapis";
-import { oauth2 } from "googleapis/build/src/apis/oauth2";
-import { request } from "node:http";
-
-require('dotenv').config();
 import { Client } from '@notionhq/client';
-const { google } = require('googleapis');
-const { auth } = require('googleapis/build/src/apis/abusiveexperiencereport');
+import { google, calendar_v3 } from 'googleapis';
+import { PageObjectResponse } from "@notionhq/client";
 
 // initialize clients
 // notion
-const notion = new Client({auth: process.env.NOTION_TOKEN})
+const notion: Client = new Client({auth: process.env.NOTION_TOKEN})
 
 //google calendar
 const oauth2Client = new google.auth.OAuth2(
@@ -34,15 +29,15 @@ const calendar = google.calendar({
 });
 
 // notion databases
-const databases = [
+const syncTargets = [
   // add the databases you want to sync
-  {id: process.env.DATABASE_ID1, name: 'Homework'.trim()},
-  {id: process.env.DATABASE_ID2, name: 'Assessments'.trim()} // the calendar with the events of this database will have the same name (if it's not created)
+  {id: process.env.DATABASE_ID1 as string, name: 'Homework'.trim()},
+  {id: process.env.DATABASE_ID2 as string, name: 'Assessments'.trim()} // the calendar with the events of this database will have the same name (if it's not created)
 ]
 
 // methods for each case
 // UPSERT (INSERT AND UPDATE lol)
-async function upsertEvent(calendarId: string, dbName: string, page: PageObjectResponse, notion: any, calendar: calendar_v3.Calendar): Promise<void> {
+async function upsertEvent(calendarId: string, dbName: string, page: PageObjectResponse, notion: Client, calendar: calendar_v3.Calendar): Promise<void> {
   const props = page.properties;
 
   // in case you haven't done that step, your database should have a column named 'GCal_ID'
@@ -123,7 +118,7 @@ async function upsertEvent(calendarId: string, dbName: string, page: PageObjectR
 }
  
 // DELET
-async function deleteEvent(calendarId: string, page: PageObjectResponse,notion: any,calendar: calendar_v3.Calendar): Promise<void> {
+async function deleteEvent(calendarId: string, page: PageObjectResponse,notion: Client,calendar: calendar_v3.Calendar): Promise<void> {
   const props = page.properties;
   
   // extract gcal id safely from notion's rich_text property structure
@@ -174,53 +169,83 @@ async function deleteEvent(calendarId: string, page: PageObjectResponse,notion: 
   }
 }
 
-// wrap every case in one single method
 async function sync(): Promise<void> {
   try {
-    // fetch user's current calendar list
+    // fetch the user's current Google Calendar list
     const response = await calendar.calendarList.list();
-    const calendars = response.data.items || [];
+    const googleCalendars = response.data.items || [];
 
-    for (const db of databases) {
+    for (const db of syncTargets) {
       let targetCalendarId: string;
-      
-      // look for a calendar matching the database name
-      const existingCalendar = calendars.find((cal: calendar_v3.Schema$CalendarListEntry) => cal.summary === db.name);
+
+      // locate or create the target Google Calendar by name
+      const existingCalendar = googleCalendars.find(
+        (cal: calendar_v3.Schema$CalendarListEntry) => cal.summary === db.name
+      );
 
       if (existingCalendar) {
         console.log(`Syncing calendar: ${db.name}`);
         targetCalendarId = existingCalendar.id!;
       } else {
-        // create it if it doesn't exist
         console.log(`Creating new calendar: ${db.name}`);
         const res = await calendar.calendars.insert({
-          requestBody: { summary: db.name, timeZone: 'America/Guayaquil' }
+          requestBody: { 
+            summary: db.name, 
+            timeZone: 'America/Guayaquil' // local time for Ecuador
+          },
         });
         targetCalendarId = res.data.id!;
       }
 
-      // query Notion database
-      const notionData = await notion.databases.query({ database_id: db.id });
+      // retrieve database metadata to extract the Data Source ID
+      const dbInfo = await notion.databases.retrieve({ database_id: db.id });
 
+      // check if data_sources exist (modern Notion API structure)
+      if (!('data_sources' in dbInfo) || !dbInfo.data_sources?.length) {
+        console.error(`Could not get data source for ${db.name}. Ensure it is shared correctly.`);
+        continue;
+      }
+
+      const dataSourceId = dbInfo.data_sources[0].id;
+
+      // query the Notion Data Source
+      const notionData = await (notion as any).dataSources.query({
+        data_source_id: dataSourceId,
+      });
+
+      // iterate through results and sync with Google Calendar
       for (const page of notionData.results as PageObjectResponse[]) {
-        const statusProp = page.properties['Status'];
-        
-        // determine if task is finished (handles 'Status' or 'Select' column types)
-        const isDone = statusProp?.type === 'status' ? statusProp.status?.name === 'Done' :
-                       statusProp?.type === 'select' ? statusProp.select?.name === 'Done' : false;
+        const props = page.properties;
+        const statusProp = props['Status'];
+
+        // determine if task is finished
+        const isDone =
+          statusProp?.type === 'status'
+            ? statusProp.status?.name === 'Done'
+            : statusProp?.type === 'select'
+              ? statusProp.select?.name === 'Done'
+              : false;
 
         if (isDone) {
           await deleteEvent(targetCalendarId, page, notion, calendar);
         } else {
+          // the 'Bad Request' often happens here if dates are null or misformatted
           await upsertEvent(targetCalendarId, db.name, page, notion, calendar);
         }
 
         // notion API Rate limit protection (3 requests/sec max)
-        await new Promise(res => setTimeout(res, 350));
+        await new Promise((res) => setTimeout(res, 350));
       }
     }
     console.log('Synchronization process finished.');
   } catch (error: any) {
+    // Log detailed error to debug 'Bad Request' issues
     console.error('Critical Sync Error:', error.message);
+    if (error.response?.data) {
+        console.error('Detailed Error Response:', JSON.stringify(error.response.data, null, 2));
+    }
   }
 }
+
+//start syncing
+sync();
