@@ -23,7 +23,8 @@ jobs:
         run: npm install
 
       - name: Run sync script
-        run: npx ts-node sync.ts
+        run: |
+          npx ts-node --compiler-options '{"module": "commonjs", "esModuleInterop": true}' sync.ts
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           DATABASE_ID1: ${{ secrets.DATABASE_ID1 }}
