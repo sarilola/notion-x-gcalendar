@@ -1,0 +1,34 @@
+name: Sync Notion DB to Google Calendar
+
+on:
+  schedule:
+    # runs every 30 minutes (approx)
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run sync script
+        run: |
+          npx ts-node --compiler-options '{"module": "commonjs", "esModuleInterop": true}' sync.ts
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          DATABASE_ID1: ${{ secrets.DATABASE_ID1 }}
+          DATABASE_ID2: ${{ secrets.DATABASE_ID2 }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
