@@ -1,3 +1,7 @@
+/***********************************
+ script made by sarilolaaa on dc ;)
+************************************/
+
 import * as dotenv from 'dotenv';
 import path from 'node:path';
 
@@ -40,8 +44,8 @@ async function upsertEvent(calendarId: string, dbName: string, page: PageObjectR
   const props = page.properties;
 
   // ensure all required Notion database columns are present
-  if (!props['Task'] || !props['Due Date'] || !props['GCal_ID']) {
-    console.error(`MISSING COLUMNS IN PAGE ${page.id}. REQUIRED: TASK, DUE DATE, GCAL_ID`);
+  if (!props['Task'] || !props['Due Date'] || !props['GCal_ID'] || !props['Last Edited Time']) {
+    console.error(`MISSING COLUMNS IN PAGE ${page.id}. REQUIRED: TASK, DUE DATE, GCAL_ID AND LAST EDITED TIME.`);
     return;
   }
 
@@ -63,9 +67,10 @@ async function upsertEvent(calendarId: string, dbName: string, page: PageObjectR
     ? { date: dueDate.end || dueDate.start } 
     : { dateTime: dueDate.end || dueDate.start, timeZone: 'America/Guayaquil' };
 
+  // event body, check official documentation to see more things you can add here to customize it
   const eventBody: calendar_v3.Schema$Event = {
     summary: taskName,
-    description: `Synced from Notion database: ${dbName}`,
+    description: `Synced from Notion database with sari\'\ s script: ${dbName}`,
     start,
     end,
   };
@@ -154,54 +159,78 @@ async function deleteEvent(calendarId: string, page: PageObjectResponse, notion:
 }
 
 // orchestrates the synchronization process between Notion and Google Calendar
+/**
+ * Synchronizes Notion databases with Google Calendar using a delta filter.
+ * Logs are organized with indentation to show the execution hierarchy.
+ */
 async function sync(): Promise<void> {
   try {
-    // retrieve all calendars from the authenticated Google account
+    // Determine the time threshold for the delta filter
+    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    console.log("====================================================");
+    console.log("        NOTION X GOOGLE CALENDAR SYNC ENGINE");
+    console.log("           DEVELOPED BY: Sara Chiriboga");
+    console.log("            STARTING SYNCHRONIZATION...");
+    console.log("====================================================\n");
+    console.log(`[INIT] DELTA FILTER ACTIVE: PAGES AFTER ${thirtyMinutesAgo}`);
+
+    // Fetch the authenticated user's calendar list
     const response = await calendar.calendarList.list();
     const googleCalendars = response.data.items || [];
 
     for (const db of syncTargets) {
       let targetCalendarId: string;
 
-      // match target database to an existing Google Calendar or create a new one
+      // Locate or create the corresponding Google Calendar
       const existingCalendar = googleCalendars.find(
         (cal: calendar_v3.Schema$CalendarListEntry) => cal.summary === db.name
       );
 
+      console.log(`\n[CALENDAR] TARGET: ${db.name}`);
+
       if (existingCalendar) {
-        console.log(`SYNCING CALENDAR: ${db.name}`);
+        console.log(`  > STATUS: FOUND EXISTING CALENDAR`);
         targetCalendarId = existingCalendar.id!;
       } else {
-        console.log(`CREATING NEW CALENDAR: ${db.name}`);
+        console.log(`  > STATUS: CREATING NEW CALENDAR`);
         const res = await calendar.calendars.insert({
           requestBody: { 
             summary: db.name, 
-            timeZone: 'America/Guayaquil' 
+            timeZone: 'America/Guayaquil' // Local time for Ecuador
           },
         });
         targetCalendarId = res.data.id!;
       }
 
-      // fetch database metadata to access the appropriate data source
+      // Access database metadata to retrieve the Data Source ID
       const dbInfo = await notion.databases.retrieve({ database_id: db.id });
 
       if (!('data_sources' in dbInfo) || !dbInfo.data_sources?.length) {
-        console.error(`COULD NOT GET DATA SOURCE FOR ${db.name}. ENSURE IT IS SHARED CORRECTLY.`);
+        console.error(`  > ERROR: COULD NOT RETRIEVE DATA SOURCE FOR ${db.name}`);
         continue;
       }
 
       const dataSourceId = dbInfo.data_sources[0].id;
 
-      // query the database via the Data Source API for modern integration support
+      // Query Notion for pages edited within the last 30 minutes
       const notionData = await (notion as any).dataSources.query({
         data_source_id: dataSourceId,
+        filter: {
+          timestamp: "last_edited_time",
+          last_edited_time: {
+            on_or_after: thirtyMinutesAgo
+          }
+        }
       });
 
+      console.log(`  > DATABASE: SEARCH COMPLETE. ${notionData.results.length} RECENT UPDATES FOUND`);
+
+      // Process individual pages
       for (const page of notionData.results as PageObjectResponse[]) {
         const props = page.properties;
         const statusProp = props['Status'];
 
-        // check if the task is marked as Done to trigger deletion or upsertion
+        // Determine if the task is complete
         const isDone =
           statusProp?.type === 'status'
             ? statusProp.status?.name === 'Done'
@@ -210,20 +239,22 @@ async function sync(): Promise<void> {
               : false;
 
         if (isDone) {
+          console.log(`    - PROCESSING: DELETING FINISHED TASK FROM GCAL`);
           await deleteEvent(targetCalendarId, page, notion, calendar);
         } else {
+          console.log(`    - PROCESSING: UPSERTING ACTIVE TASK TO GCAL`);
           await upsertEvent(targetCalendarId, db.name, page, notion, calendar);
         }
 
-        // delay to comply with Notion API rate limits
+        // Notion API rate limit protection (3 requests/sec max)
         await new Promise((res) => setTimeout(res, 350));
       }
     }
-    console.log('SYNCHRONIZATION PROCESS FINISHED :)');
+    console.log('\n[FINISH] SYNCHRONIZATION PROCESS COMPLETE.');
   } catch (error: any) {
-    console.error('CRITICAL SYNC ERROR:', error.message);
+    console.error('\n[CRITICAL ERROR] SYNC FAILED:', error.message);
     if (error.response?.data) {
-        console.error('DETAILED ERROR RESPONSE:', JSON.stringify(error.response.data, null, 2));
+        console.error('  > DETAILS:', JSON.stringify(error.response.data, null, 2));
     }
   }
 }
