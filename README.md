@@ -248,7 +248,7 @@ Even with a perfect setup, you might encounter some common issues. Here is how t
 * **Error: "Bad Request" (400)**: Usually caused by a Google API rejection due to invalid date formats or empty fields. Ensure every synced task has a valid **Due Date**.
 * **Missing Columns**: Double-check that your database properties are named **exactly** as shown in the Requirements table (case-sensitive).
 * **Sync Delay**: GitHub Actions "Cron" schedules are not real-time guarantees. A 30-minute sync might occasionally take longer depending on GitHub's server load.
-* **Unauthorized (401)**: This happens if your `GOOGLE_REFRESH_TOKEN` expires or if your Google Cloud Project is in "Testing" mode and you haven't added your email as a Test User.
+* **Unauthorized (401)**: This happens if your `GOOGLE_REFRESH_TOKEN` expires or if your Google Cloud Project is in "Testing" mode and you haven't added your email as a Test User. To permanently solve this problem your project must be marked as "In Production".
 
 ## ✨ Suggestions
 
