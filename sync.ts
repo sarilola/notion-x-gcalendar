@@ -1,5 +1,5 @@
 /***********************************
- script made by sarilolaaa on dc ;)
+ script made by sari on dc ;)
 ************************************/
 
 import * as dotenv from 'dotenv';
@@ -212,21 +212,30 @@ async function sync(): Promise<void> {
 
       const dataSourceId = dbInfo.data_sources[0].id;
 
-      // Query Notion for pages edited within the last 30 minutes
-      const notionData = await (notion as any).dataSources.query({
-        data_source_id: dataSourceId,
-        filter: {
-          timestamp: "last_edited_time",
-          last_edited_time: {
-            on_or_after: thirtyMinutesAgo
+      // Query Notion for pages edited or created within the last 30 minutes
+      const [notionData, notionDataNew] = await Promise.all([
+        (notion as any).dataSources.query({
+          data_source_id: dataSourceId,
+          filter: {
+            timestamp: "last_edited_time",
+            last_edited_time: { on_or_after: thirtyMinutesAgo }
           }
-        }
-      });
+        }),
+        (notion as any).dataSources.query({
+          data_source_id: dataSourceId,
+          filter: {
+            timestamp: "created_time",
+            created_time: { on_or_after: thirtyMinutesAgo }
+          }
+        })
+      ]);
 
-      console.log(`  > DATABASE: SEARCH COMPLETE. ${notionData.results.length} RECENT UPDATES FOUND`);
+      // Merge results and remove duplicates based on page ID
+      const allResults = [...notionData.results, ...notionDataNew.results];
+      const uniqueResults = Array.from(new Map(allResults.map(page => [page.id, page])).values());
 
       // Process individual pages
-      for (const page of notionData.results as PageObjectResponse[]) {
+      for (const page of uniqueResults as PageObjectResponse[]) {
         const props = page.properties;
         const statusProp = props['Status'];
 

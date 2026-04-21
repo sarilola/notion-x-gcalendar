@@ -38,7 +38,7 @@ This script monitors your Notion databases for changes and reflects them in Goog
 
 ## ✨ Key Features
 
-* **Delta Sync:** Only processes pages edited in the last 30 minutes to save API quota and execution time.
+* **Enhanced Delta Sync:** Now performs a double-check by querying both recently edited and newly created items within a 30-minute window, ensuring no task is missed during high-activity periods.
 * **Intelligent Upsert:** Creates new events or updates existing ones based on a persistent `GCal_ID`.
 * **Smart Deletion:** Automatically removes events from Google Calendar when a task is marked as "Done".
 * **Timezone Aware:** Specifically configured for `America/Guayaquil` (Ecuador) but easily adaptable.
@@ -70,6 +70,7 @@ Your Notion databases (like **Homework** or **Assessments**) must have columns w
 | **Status** | **Status** or **Select** | If you change this to `Done`, the event is deleted from GCal. |
 | **GCal_ID** | **Text (Rich Text)** | A placeholder where the script stores the link to the Google event. |
 | **Last Edited Time** | **Last Edited Time** | Vital for "Delta Sync"—it tells the script what changed recently. |
+| **Created Time** | **Created Time** | Used to ensure newly added tasks are captured immediately by the sync engine.|
 
 ### 3. Connect the Bridge to your Database (CRITICAL)
 By default, your new Integration is locked out of your data. You must manually grant it access to each database you want to sync:
@@ -249,6 +250,7 @@ Even with a perfect setup, you might encounter some common issues. Here is how t
 * **Missing Columns**: Double-check that your database properties are named **exactly** as shown in the Requirements table (case-sensitive).
 * **Sync Delay**: GitHub Actions "Cron" schedules are not real-time guarantees. A 30-minute sync might occasionally take longer depending on GitHub's server load.
 * **Unauthorized (401)**: This happens if your `GOOGLE_REFRESH_TOKEN` expires or if your Google Cloud Project is in "Testing" mode and you haven't added your email as a Test User. To permanently solve this problem your project must be marked as "In Production".
+* **Duplicate search results in logs:** You might notice the console reporting both "Recent Updates" and "New Items" found. This is normal behavior, as the Notion API often categorizes a newly created page as an "update" as well. The script is designed to handle this without creating duplicates in your calendar.
 
 ## ✨ Suggestions
 
