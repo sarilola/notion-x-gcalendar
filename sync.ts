@@ -44,8 +44,8 @@ async function upsertEvent(calendarId: string, dbName: string, page: PageObjectR
   const props = page.properties;
 
   // ensure all required Notion database columns are present
-  if (!props['Task'] || !props['Due Date'] || !props['GCal_ID'] || !props['Last Edited Time']) {
-    console.error(`MISSING COLUMNS IN PAGE ${page.id}. REQUIRED: TASK, DUE DATE, GCAL_ID AND LAST EDITED TIME.`);
+  if (!props['Task'] || !props['Due Date'] || !props['GCal_ID'] || !props['Last Edited Time'] || !props['Created Time']) {
+    console.error(`MISSING COLUMNS IN PAGE ${page.id}. REQUIRED: TASK, DUE DATE, GCAL_ID, LAST EDITED TIME AND CREATED TIME.`);
     return;
   }
 
