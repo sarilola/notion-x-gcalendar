@@ -2,8 +2,10 @@ name: Sync Notion DB to Google Calendar
 
 on:
   schedule:
-    # runs every 30 minutes (approx)
-    - cron: '*/30 * * * *'
+    # runs every hour at minute 0 — hourly crons are respected consistently
+    # by GitHub's scheduler unlike */30 which gets queued and delayed for hours.
+    # the sync script already queries a 90-minute window so no changes are missed.
+    - cron: '0 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -23,8 +25,7 @@ jobs:
         run: npm install
 
       - name: Run sync script
-        run: |
-          npx ts-node --compiler-options '{"module": "commonjs", "esModuleInterop": true}' sync.ts
+        run: npx ts-node sync.ts
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           DATABASE_ID1: ${{ secrets.DATABASE_ID1 }}
