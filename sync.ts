@@ -279,7 +279,7 @@ async function deleteEvent(
  *
  * Flow per database:
  *   1. Resolve the data_source_id from the database (required by SDK v5).
- *   2. Query the data source for pages edited in the last 30 minutes using
+ *   2. Query the data source for pages edited in the last 90 minutes using
  *      notion.dataSources.query() — the official SDK v5 method.
  *   3. Paginate through all results so no page is lost at the 100-row cap.
  *   4. Upsert active tasks; delete tasks marked as "Done".
