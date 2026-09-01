@@ -38,9 +38,11 @@ This script monitors your Notion databases for changes and reflects them in Goog
 
 ## ✨ Key Features
 
-* **Enhanced Delta Sync:** Now performs a double-check by querying both recently edited and newly created items within a 30-minute window, ensuring no task is missed during high-activity periods.
+* **Resilient Compound Delta Sync:** Queries tasks edited in the last 4 hours AND all unsynced tasks (where `GCal_ID` is empty). This guarantees that no task is ever missed, even during GitHub Actions queue delays.
+* **Flexible Column Detection:** Automatically identifies your title (`Task`, `Name`, `Tarea`), date (`Due Date`, `Date`, `Fecha`), and status properties without breaking on minor naming variations.
+* **Accurate Date Handling:** Accurately formats all-day events (using Google Calendar's exclusive end date standard) and timed events (+1h default duration) to avoid invisible 0-duration events.
 * **Intelligent Upsert:** Creates new events or updates existing ones based on a persistent `GCal_ID`.
-* **Smart Deletion:** Automatically removes events from Google Calendar when a task is marked as "Done".
+* **Smart Deletion:** Automatically removes events from Google Calendar when a task is marked as "Done" / "Completada" (supports Status, Select, or Checkbox).
 * **Timezone Aware:** Specifically configured for `America/Guayaquil` (Ecuador) but easily adaptable.
 * **Clean Logging:** Professional, indented terminal output for easy debugging.
 
@@ -61,16 +63,17 @@ Notion needs a specific "User" (Integration) that represents this script.
 5. Click **Submit**. You will be shown an **Internal Integration Token**. **Copy this immediately!** This is your `NOTION_TOKEN` for the setup.
 
 ### 2. Prepare your Databases
-Your Notion databases (like **Homework** or **Assessments**) must have columns with these **exact** names and types. If a name is misspelled, the script will stop to avoid errors.
+Your Notion databases (like **Homework** or **Assessments**) only need the following columns. The script automatically detects common variations in naming:
 
-| Property Name | Type | Purpose |
-| :--- | :--- | :--- |
-| **Task** | **Title** | The text that will appear as the event title in Google Calendar. |
-| **Due Date** | **Date** | The scheduled time. Supports "All day" or specific hours. |
-| **Status** | **Status** or **Select** | If you change this to `Done`, the event is deleted from GCal. |
-| **GCal_ID** | **Text (Rich Text)** | A placeholder where the script stores the link to the Google event. |
-| **Last Edited Time** | **Last Edited Time** | Vital for "Delta Sync"—it tells the script what changed recently. |
-| **Created Time** | **Created Time** | Used to ensure newly added tasks are captured immediately by the sync engine.|
+| Property | Accepted Names | Type | Purpose |
+| :--- | :--- | :--- | :--- |
+| **Task Title** | `Task`, `Name`, `Tarea`, `Title`, `Nombre` | **Title** | The text that will appear as the event title in Google Calendar. |
+| **Due Date** | `Due Date`, `Date`, `Fecha`, `Fecha límite`, `Entrega` | **Date** | The scheduled time. Supports "All day" or specific hours. |
+| **GCal_ID** | `GCal_ID`, `GCal ID`, `gcal_id` | **Text (Rich Text)** | Stores the Google Calendar event ID to track and update synced events. |
+| **Status** *(Optional)* | `Status`, `Estado`, `Done` | **Status**, **Select**, or **Checkbox** | When marked as `Done`, `Completada`, `Listo`, etc., the event is removed from GCal. |
+
+> [!NOTE]
+> `Last Edited Time` and `Created Time` are built-in metadata in Notion and are **no longer required** as custom database columns.
 
 ### 3. Connect the Bridge to your Database (CRITICAL)
 By default, your new Integration is locked out of your data. You must manually grant it access to each database you want to sync:
@@ -247,10 +250,9 @@ In case you don't know which option suits you better, check this table with some
 Even with a perfect setup, you might encounter some common issues. Here is how to fix them:
 
 * **Error: "Bad Request" (400)**: Usually caused by a Google API rejection due to invalid date formats or empty fields. Ensure every synced task has a valid **Due Date**.
-* **Missing Columns**: Double-check that your database properties are named **exactly** as shown in the Requirements table (case-sensitive).
-* **Sync Delay**: GitHub Actions "Cron" schedules are not real-time guarantees. A 30-minute sync might occasionally take longer depending on GitHub's server load.
+* **Missing GCal_ID Property**: Make sure your database has a text property named `GCal_ID` so the script can record event IDs and prevent duplication.
+* **Sync Delay in GitHub Actions**: Scheduled crons on GitHub can experience queue delays. The engine now uses a **4-hour lookback buffer** and **queries all unsynced tasks (`GCal_ID` is empty)**, ensuring no tasks are missed even during scheduler backlog.
 * **Unauthorized (401)**: This happens if your `GOOGLE_REFRESH_TOKEN` expires or if your Google Cloud Project is in "Testing" mode and you haven't added your email as a Test User. To permanently solve this problem your project must be marked as "In Production".
-* **Duplicate search results in logs:** You might notice the console reporting both "Recent Updates" and "New Items" found. This is normal behavior, as the Notion API often categorizes a newly created page as an "update" as well. The script is designed to handle this without creating duplicates in your calendar.
 
 ## ✨ Suggestions
 

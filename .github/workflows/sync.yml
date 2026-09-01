@@ -2,10 +2,10 @@ name: Sync Notion DB to Google Calendar
 
 on:
   schedule:
-    # runs every hour at minute 0 — hourly crons are respected consistently
-    # by GitHub's scheduler unlike */30 which gets queued and delayed for hours.
-    # the sync script queries a 90-minute window so no changes are missed.
-    - cron: '0 * * * *'
+    # Runs at minute 23 of every hour to avoid the heavy peak congestion at minute :00.
+    # The sync script now uses a 4-hour lookback buffer AND queries all unsynced tasks
+    # (GCal_ID is empty), ensuring no tasks are missed even during GitHub scheduler delays.
+    - cron: '23 * * * *'
   workflow_dispatch:
 
 jobs:
